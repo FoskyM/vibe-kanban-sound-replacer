@@ -1,0 +1,14 @@
+{
+  "name": "Vibe Kanban Sound Replacer",
+  "namespace": "https://github.com/FoskyM/vibe-kanban-sound-replacer",
+  "description": "替换 vibe-kanban 的音效 / Replace sound effects in vibe-kanban",
+  "match": "*://*/*",
+  "grant": [
+    "GM_getValue",
+    "GM_setValue",
+    "GM_registerMenuCommand",
+    "unsafeWindow"
+  ],
+  "run-at": "document-start",
+  "license": "MIT"
+}

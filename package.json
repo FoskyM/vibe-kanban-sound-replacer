@@ -1,0 +1,32 @@
+{
+  "name": "vibe-kanban-sound-replacer",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "替换 vibe-kanban 音效的油猴脚本 / Tampermonkey script for replacing vibe-kanban sounds",
+  "main": "dist/vibe-kanban-sound-replacer.user.js",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c -w",
+    "dev": "rollup -c -w"
+  },
+  "keywords": [
+    "tampermonkey",
+    "userscript",
+    "vibe-kanban",
+    "sound-replacer"
+  ],
+  "author": "FoskyM <i@fosky.top>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FoskyM/vibe-kanban-sound-replacer.git"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "rollup": "^4.9.6",
+    "rollup-plugin-userscript-metablock": "^0.3.3",
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3"
+  }
+}

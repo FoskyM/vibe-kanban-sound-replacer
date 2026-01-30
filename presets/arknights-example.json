@@ -1,0 +1,61 @@
+{
+  "enabled": true,
+  "sounds": {
+    "ABSTRACT_SOUND1": {
+      "mode": "single",
+      "sources": [],
+      "sequenceIndex": 0
+    },
+    "ABSTRACT_SOUND2": {
+      "mode": "single",
+      "sources": [],
+      "sequenceIndex": 0
+    },
+    "ABSTRACT_SOUND3": {
+      "mode": "single",
+      "sources": [],
+      "sequenceIndex": 0
+    },
+    "ABSTRACT_SOUND4": {
+      "mode": "single",
+      "sources": [],
+      "sequenceIndex": 0
+    },
+    "COW_MOOING": {
+      "mode": "sequence",
+      "sources": [
+        {
+          "url": "https://torappu.prts.wiki/assets/audio/voice/char_436_whispr/cn_022.mp3",
+          "weight": 1,
+          "name": "絮雨-准备好注射了"
+        },
+        {
+          "url": "https://torappu.prts.wiki/assets/audio/voice/char_436_whispr/cn_037.mp3",
+          "weight": 1,
+          "name": "絮雨-明日方舟"
+        },
+        {
+          "url": "https://torappu.prts.wiki/assets/audio/voice/char_002_amiya/cn_019.mp3",
+          "weight": 1,
+          "name": "阿米娅-行动开始"
+        },
+        {
+          "url": "https://torappu.prts.wiki/assets/audio/voice/char_002_amiya/cn_037.mp3",
+          "weight": 1,
+          "name": "阿米娅-明日方舟"
+        }
+      ],
+      "sequenceIndex": 1
+    },
+    "PHONE_VIBRATION": {
+      "mode": "single",
+      "sources": [],
+      "sequenceIndex": 0
+    },
+    "ROOSTER": {
+      "mode": "single",
+      "sources": [],
+      "sequenceIndex": 0
+    }
+  }
+}
