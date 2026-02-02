@@ -4,6 +4,32 @@
 
 A Tampermonkey script for replacing sound effects in vibe-kanban.
 
+## 工作原理 / How It Works
+
+### 网页端音效替换 / Web Audio Replacement
+
+本插件通过劫持 `window.Audio` 构造函数来拦截音频播放请求，根据配置替换为自定义音频。这种方式适用于网页端的音效替换。
+
+This plugin hijacks the `window.Audio` constructor to intercept audio playback requests and replace them with custom audio based on your configuration. This approach works for web-based audio replacement.
+
+### 桌面端音效替换 / Desktop Audio Replacement
+
+**重要说明**：Vibe Kanban 桌面应用的音效播放由 Rust 后端处理，而非浏览器的 `window.Audio`，因此网页端的劫持方式对桌面应用无效。
+
+**Important**: The Vibe Kanban desktop app plays audio through the Rust backend, not the browser's `window.Audio`, so the web-based hijacking approach does not work for the desktop app.
+
+为解决此问题，本插件提供了「导出脚本」功能，可生成平台特定的通知脚本包。该脚本会在每次通知时替换音频文件，从而实现桌面端的音效替换。
+
+To address this, the plugin provides an "Export Script" feature that generates platform-specific notification script packages. The script replaces audio files on each notification, enabling audio replacement for the desktop app.
+
+### 平台支持 / Platform Support
+
+| 平台 / Platform | 网页端 / Web | 桌面端 / Desktop |
+|----------------|-------------|-----------------|
+| Windows | ✅ 支持 | ✅ 支持 (PowerShell 脚本) |
+| macOS | ✅ 支持 | 🔜 计划中 |
+| Linux | ✅ 支持 | 🔜 计划中 |
+
 ## 功能特性 / Features
 
 - **自动检测 / Auto Detection**: 通过网页标题或 JS 内容自动检测 vibe-kanban 页面 (Automatically detect vibe-kanban pages by title or JS content)
@@ -13,6 +39,7 @@ A Tampermonkey script for replacing sound effects in vibe-kanban.
 - **可视化配置 / Visual Config**: 在设置页面提供可视化配置界面 (Provide visual configuration UI in settings page)
 - **主题适配 / Theme Support**: 自动适配浅色/深色主题 (Automatically adapt to light/dark theme)
 - **移动端适配 / Mobile Friendly**: 响应式设计，支持移动端使用 (Responsive design, mobile-friendly)
+- **导出脚本 / Export Script**: 导出桌面端通知脚本包 (Export desktop notification script package)
 
 ## 支持的音效 / Supported Sounds
 
@@ -59,6 +86,21 @@ Visit the `/settings/general` page and click the "音效 Sounds" button to open 
 支持将配置导出为 JSON 文件，方便备份和迁移。
 
 Support exporting configuration as JSON file for backup and migration.
+
+### 导出脚本 (桌面端) / Export Script (Desktop)
+
+针对桌面应用，可导出通知脚本包来实现音效替换：
+
+For desktop apps, you can export a notification script package to enable audio replacement:
+
+1. 在设置面板中配置好音效 (Configure sounds in the settings panel)
+2. 点击「导出脚本 Export Script」按钮 (Click "导出脚本 Export Script" button)
+3. 下载并解压 ZIP 包 (Download and extract the ZIP package)
+4. 按照 README.md 说明安装到 Vibe Kanban 目录 (Follow README.md instructions to install)
+
+**注意**：导出时所有音频文件会自动转换为 WAV 格式以确保兼容性。
+
+**Note**: All audio files are automatically converted to WAV format during export for compatibility.
 
 ## 开发 / Development
 

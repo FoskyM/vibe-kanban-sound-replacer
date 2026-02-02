@@ -1,5 +1,6 @@
 import typescript from '@rollup/plugin-typescript';
 import resolve from '@rollup/plugin-node-resolve';
+import commonjs from '@rollup/plugin-commonjs';
 import metablock from 'rollup-plugin-userscript-metablock';
 import { readFileSync } from 'fs';
 
@@ -14,6 +15,7 @@ export default {
   },
   plugins: [
     resolve(),
+    commonjs(),
     typescript({
       tsconfig: './tsconfig.json'
     }),

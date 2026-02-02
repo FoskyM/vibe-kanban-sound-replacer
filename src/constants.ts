@@ -32,6 +32,20 @@ export const SOUND_DISPLAY_NAMES: Record<SoundFile, string> = {
 };
 
 /**
+ * 音效文件名映射（用于导出脚本）/ Sound filename mapping (for export script)
+ * 映射到 Vibe Kanban 使用的实际文件名 / Maps to actual filenames used by Vibe Kanban
+ */
+export const SOUND_FILENAMES: Record<SoundFile, string> = {
+  'ABSTRACT_SOUND1': 'sound-abstract-sound1.wav',
+  'ABSTRACT_SOUND2': 'sound-abstract-sound2.wav',
+  'ABSTRACT_SOUND3': 'sound-abstract-sound3.wav',
+  'ABSTRACT_SOUND4': 'sound-abstract-sound4.wav',
+  'COW_MOOING': 'sound-cow-mooing.wav',
+  'PHONE_VIBRATION': 'sound-phone-vibration.wav',
+  'ROOSTER': 'sound-rooster.wav'
+};
+
+/**
  * 播放模式显示名称 / Play mode display names
  */
 export const MODE_DISPLAY_NAMES = {

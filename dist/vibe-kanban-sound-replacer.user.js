@@ -5,7 +5,7 @@
 // @match       *://*/*
 // @run-at      document-start
 // @license     MIT
-// @version     1.0.0
+// @version     1.1.0
 // @author      FoskyM <i@fosky.top>
 // @grant       GM_getValue
 // @grant       GM_setValue
@@ -39,6 +39,19 @@
         'COW_MOOING': 'Cow',
         'PHONE_VIBRATION': 'Vibration',
         'ROOSTER': 'Rooster'
+    };
+    /**
+     * 音效文件名映射（用于导出脚本）/ Sound filename mapping (for export script)
+     * 映射到 Vibe Kanban 使用的实际文件名 / Maps to actual filenames used by Vibe Kanban
+     */
+    const SOUND_FILENAMES = {
+        'ABSTRACT_SOUND1': 'sound-abstract-sound1.wav',
+        'ABSTRACT_SOUND2': 'sound-abstract-sound2.wav',
+        'ABSTRACT_SOUND3': 'sound-abstract-sound3.wav',
+        'ABSTRACT_SOUND4': 'sound-abstract-sound4.wav',
+        'COW_MOOING': 'sound-cow-mooing.wav',
+        'PHONE_VIBRATION': 'sound-phone-vibration.wav',
+        'ROOSTER': 'sound-rooster.wav'
     };
     /**
      * 播放模式显示名称 / Play mode display names
@@ -951,6 +964,622 @@
         });
     }
 
+    // 简易 ZIP 实现 (无压缩，仅存储)
+    // Simple ZIP implementation (store only, no compression)
+    /**
+     * CRC32 查找表 / CRC32 lookup table
+     */
+    const crc32Table = (() => {
+        const table = new Uint32Array(256);
+        for (let i = 0; i < 256; i++) {
+            let c = i;
+            for (let j = 0; j < 8; j++) {
+                c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+            }
+            table[i] = c;
+        }
+        return table;
+    })();
+    /**
+     * 计算 CRC32 / Calculate CRC32
+     */
+    function crc32(data) {
+        let crc = 0xFFFFFFFF;
+        for (let i = 0; i < data.length; i++) {
+            crc = crc32Table[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+        }
+        return (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+    /**
+     * 写入小端序 16 位整数 / Write little-endian 16-bit integer
+     */
+    function writeUint16LE(value) {
+        return new Uint8Array([value & 0xFF, (value >> 8) & 0xFF]);
+    }
+    /**
+     * 写入小端序 32 位整数 / Write little-endian 32-bit integer
+     */
+    function writeUint32LE(value) {
+        return new Uint8Array([
+            value & 0xFF,
+            (value >> 8) & 0xFF,
+            (value >> 16) & 0xFF,
+            (value >> 24) & 0xFF
+        ]);
+    }
+    /**
+     * 合并多个 Uint8Array / Concatenate multiple Uint8Arrays
+     */
+    function concatArrays(...arrays) {
+        const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
+        const result = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const arr of arrays) {
+            result.set(arr, offset);
+            offset += arr.length;
+        }
+        return result;
+    }
+    /**
+     * 创建 ZIP 文件 / Create ZIP file
+     * 使用 STORE 方法（无压缩）/ Using STORE method (no compression)
+     */
+    function createZip(entries) {
+        const encoder = new TextEncoder();
+        const localHeaders = [];
+        const centralHeaders = [];
+        let offset = 0;
+        // DOS 时间戳 / DOS timestamp
+        const now = new Date();
+        const dosTime = ((now.getSeconds() >> 1) | (now.getMinutes() << 5) | (now.getHours() << 11)) & 0xFFFF;
+        const dosDate = (now.getDate() | ((now.getMonth() + 1) << 5) | ((now.getFullYear() - 1980) << 9)) & 0xFFFF;
+        for (const entry of entries) {
+            const nameBytes = encoder.encode(entry.name);
+            const crcValue = crc32(entry.data);
+            const size = entry.data.length;
+            // Local file header
+            const localHeader = concatArrays(new Uint8Array([0x50, 0x4B, 0x03, 0x04]), // 签名 / Signature
+            writeUint16LE(20), // 版本 / Version needed
+            writeUint16LE(0), // 标志 / Flags
+            writeUint16LE(0), // 压缩方法 (0=STORE) / Compression method
+            writeUint16LE(dosTime), // 修改时间 / Mod time
+            writeUint16LE(dosDate), // 修改日期 / Mod date
+            writeUint32LE(crcValue), // CRC32
+            writeUint32LE(size), // 压缩大小 / Compressed size
+            writeUint32LE(size), // 原始大小 / Uncompressed size
+            writeUint16LE(nameBytes.length), // 文件名长度 / Filename length
+            writeUint16LE(0), // 额外字段长度 / Extra field length
+            nameBytes, // 文件名 / Filename
+            entry.data // 文件数据 / File data
+            );
+            // Central directory header
+            const centralHeader = concatArrays(new Uint8Array([0x50, 0x4B, 0x01, 0x02]), // 签名 / Signature
+            writeUint16LE(20), // 创建版本 / Version made by
+            writeUint16LE(20), // 需要版本 / Version needed
+            writeUint16LE(0), // 标志 / Flags
+            writeUint16LE(0), // 压缩方法 / Compression method
+            writeUint16LE(dosTime), // 修改时间 / Mod time
+            writeUint16LE(dosDate), // 修改日期 / Mod date
+            writeUint32LE(crcValue), // CRC32
+            writeUint32LE(size), // 压缩大小 / Compressed size
+            writeUint32LE(size), // 原始大小 / Uncompressed size
+            writeUint16LE(nameBytes.length), // 文件名长度 / Filename length
+            writeUint16LE(0), // 额外字段长度 / Extra field length
+            writeUint16LE(0), // 注释长度 / Comment length
+            writeUint16LE(0), // 磁盘号 / Disk number
+            writeUint16LE(0), // 内部属性 / Internal attributes
+            writeUint32LE(0), // 外部属性 / External attributes
+            writeUint32LE(offset), // 本地头偏移 / Local header offset
+            nameBytes // 文件名 / Filename
+            );
+            localHeaders.push(localHeader);
+            centralHeaders.push(centralHeader);
+            offset += localHeader.length;
+        }
+        const centralDirOffset = offset;
+        const centralDirSize = centralHeaders.reduce((sum, h) => sum + h.length, 0);
+        // End of central directory
+        const endOfCentralDir = concatArrays(new Uint8Array([0x50, 0x4B, 0x05, 0x06]), // 签名 / Signature
+        writeUint16LE(0), // 磁盘号 / Disk number
+        writeUint16LE(0), // 中央目录磁盘号 / Central dir disk
+        writeUint16LE(entries.length), // 本磁盘条目数 / Entries on disk
+        writeUint16LE(entries.length), // 总条目数 / Total entries
+        writeUint32LE(centralDirSize), // 中央目录大小 / Central dir size
+        writeUint32LE(centralDirOffset), // 中央目录偏移 / Central dir offset
+        writeUint16LE(0) // 注释长度 / Comment length
+        );
+        return concatArrays(...localHeaders, ...centralHeaders, endOfCentralDir);
+    }
+
+    // WAV 音频转换工具 / WAV audio conversion utilities
+    // 使用 Web Audio API 将各种音频格式转换为 WAV
+    /**
+     * 创建 WAV 文件头 / Create WAV file header
+     */
+    function createWavHeader(dataLength, header) {
+        const { sampleRate, numChannels, bitsPerSample } = header;
+        const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+        const blockAlign = numChannels * (bitsPerSample / 8);
+        const buffer = new ArrayBuffer(44);
+        const view = new DataView(buffer);
+        // RIFF chunk descriptor
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, 36 + dataLength, true); // file size - 8
+        writeString(view, 8, 'WAVE');
+        // fmt sub-chunk
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true); // sub-chunk size
+        view.setUint16(20, 1, true); // audio format (1 = PCM)
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, byteRate, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, bitsPerSample, true);
+        // data sub-chunk
+        writeString(view, 36, 'data');
+        view.setUint32(40, dataLength, true);
+        return buffer;
+    }
+    /**
+     * 写入字符串到 DataView / Write string to DataView
+     */
+    function writeString(view, offset, str) {
+        for (let i = 0; i < str.length; i++) {
+            view.setUint8(offset + i, str.charCodeAt(i));
+        }
+    }
+    /**
+     * 将 AudioBuffer 转换为 WAV 格式的 Uint8Array / Convert AudioBuffer to WAV format Uint8Array
+     */
+    function audioBufferToWav(audioBuffer) {
+        const numChannels = audioBuffer.numberOfChannels;
+        const sampleRate = audioBuffer.sampleRate;
+        const bitsPerSample = 16;
+        const length = audioBuffer.length;
+        // 交错通道数据 / Interleave channel data
+        const interleaved = new Int16Array(length * numChannels);
+        for (let channel = 0; channel < numChannels; channel++) {
+            const channelData = audioBuffer.getChannelData(channel);
+            for (let i = 0; i < length; i++) {
+                // 将 float32 (-1 to 1) 转换为 int16 / Convert float32 to int16
+                const sample = Math.max(-1, Math.min(1, channelData[i]));
+                interleaved[i * numChannels + channel] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+            }
+        }
+        // 创建 WAV 文件 / Create WAV file
+        const dataLength = interleaved.length * 2; // 16-bit = 2 bytes per sample
+        const header = createWavHeader(dataLength, { sampleRate, numChannels, bitsPerSample });
+        // 合并头部和数据 / Combine header and data
+        const wav = new Uint8Array(44 + dataLength);
+        wav.set(new Uint8Array(header), 0);
+        wav.set(new Uint8Array(interleaved.buffer), 44);
+        return wav;
+    }
+    /**
+     * 检查是否为有效的 WAV 文件 / Check if valid WAV file
+     */
+    function isValidWav(data) {
+        if (data.length < 44)
+            return false;
+        // 检查 RIFF 头 / Check RIFF header
+        const riff = String.fromCharCode(data[0], data[1], data[2], data[3]);
+        const wave = String.fromCharCode(data[8], data[9], data[10], data[11]);
+        return riff === 'RIFF' && wave === 'WAVE';
+    }
+    /**
+     * 将音频数据转换为 WAV 格式 / Convert audio data to WAV format
+     * @param data 原始音频数据 / Original audio data
+     * @returns WAV 格式的音频数据 / WAV format audio data
+     */
+    async function convertToWav(data) {
+        // 如果已经是有效的 WAV，直接返回 / If already valid WAV, return as-is
+        if (isValidWav(data)) {
+            return data;
+        }
+        // 使用 Web Audio API 解码 / Decode using Web Audio API
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        try {
+            const arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            const wavData = audioBufferToWav(audioBuffer);
+            return wavData;
+        }
+        finally {
+            await audioContext.close();
+        }
+    }
+
+    // Windows 平台脚本生成器 / Windows platform script generator
+    /**
+     * Windows 平台脚本生成器 / Windows platform script generator
+     */
+    const windowsGenerator = {
+        platform: 'windows',
+        scriptFilename: 'toast-notification.ps1',
+        generateScript(audioInfos) {
+            // 生成配置对象 / Generate config object
+            const configEntries = audioInfos.map(info => {
+                const filesStr = info.sourceFiles.map(f => `"${f}"`).join(', ');
+                const weightsStr = info.weights.join(', ');
+                return `    "${info.targetFilename}" = @{
+        Sources = @(${filesStr})
+        Weights = @(${weightsStr})
+        Mode = "${info.mode}"
+    }`;
+            }).join('\n');
+            return `# Vibe Kanban Sound Replacer - Toast Notification Script (Windows)
+# Generated by VKSR Plugin
+# https://github.com/foskym/vibe-kanban-sound-replacer
+#
+# 工作原理 / How it works:
+# 1. 脚本启动时扫描 sounds/ 目录下的音频源文件
+# 2. 根据配置的模式选择一个音频文件
+# 3. 将选中的音频复制为目标文件名 (如 sound-cow-mooing.wav)
+# 4. Vibe Kanban 播放该文件时就会使用替换后的音频
+
+param(
+    [Parameter(Mandatory=$true)]
+    [string]$Title,
+
+    [Parameter(Mandatory=$true)]
+    [string]$Message,
+
+    [Parameter(Mandatory=$false)]
+    [string]$AppName = "Vibe Kanban"
+)
+
+# ============================================
+# Configuration
+# ============================================
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$SoundsDir = Join-Path $ScriptDir "sounds"
+$StateFile = Join-Path $ScriptDir "vksr-state.json"
+
+# Sound configurations (generated from plugin settings)
+# 每个音效的配置：Sources=源文件列表, Weights=权重, Mode=播放模式
+$SoundConfig = @{
+${configEntries}
+}
+
+# ============================================
+# Functions
+# ============================================
+
+function Get-State {
+    if (Test-Path $StateFile) {
+        try {
+            $content = Get-Content $StateFile -Raw -ErrorAction Stop
+            if ($content) {
+                return $content | ConvertFrom-Json
+            }
+        } catch {}
+    }
+    return [PSCustomObject]@{}
+}
+
+function Save-State($state) {
+    try {
+        $state | ConvertTo-Json | Set-Content $StateFile -Encoding UTF8 -ErrorAction Stop
+    } catch {}
+}
+
+function Select-SourceFile($targetName, $cfg) {
+    $sources = $cfg.Sources
+    $weights = $cfg.Weights
+    $mode = $cfg.Mode
+
+    if ($sources.Count -eq 0) { return $null }
+    if ($sources.Count -eq 1) { return $sources[0] }
+
+    switch ($mode) {
+        "single" {
+            return $sources[0]
+        }
+        "random" {
+            return $sources | Get-Random
+        }
+        "sequence" {
+            $state = Get-State
+            $key = "seq_$targetName"
+            $index = 0
+            if ($state.PSObject.Properties.Name -contains $key) {
+                $index = [int]$state.$key
+            }
+            $selected = $sources[$index % $sources.Count]
+            $state | Add-Member -NotePropertyName $key -NotePropertyValue (($index + 1) % $sources.Count) -Force
+            Save-State $state
+            return $selected
+        }
+        "weighted" {
+            $totalWeight = ($weights | Measure-Object -Sum).Sum
+            if ($totalWeight -le 0) { return $sources[0] }
+            $rand = Get-Random -Minimum 0 -Maximum $totalWeight
+            $cumulative = 0
+            for ($i = 0; $i -lt $sources.Count; $i++) {
+                $cumulative += $weights[$i]
+                if ($rand -lt $cumulative) {
+                    return $sources[$i]
+                }
+            }
+            return $sources[0]
+        }
+        default {
+            return $sources[0]
+        }
+    }
+}
+
+# ============================================
+# Main Logic - Replace Sound Files
+# ============================================
+
+foreach ($targetName in $SoundConfig.Keys) {
+    $cfg = $SoundConfig[$targetName]
+    $targetPath = Join-Path $ScriptDir $targetName
+
+    # 选择源文件 / Select source file
+    $selectedSource = Select-SourceFile $targetName $cfg
+    if (-not $selectedSource) { continue }
+
+    $sourcePath = Join-Path $SoundsDir $selectedSource
+    if (-not (Test-Path $sourcePath)) { continue }
+
+    # 复制文件替换目标 / Copy file to replace target
+    try {
+        Copy-Item -Path $sourcePath -Destination $targetPath -Force -ErrorAction Stop
+    } catch {
+        # 忽略复制错误 / Ignore copy errors
+    }
+}
+
+# ============================================
+# Show Toast Notification
+# ============================================
+
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+$Template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+$RawXml = [xml] $Template.GetXml()
+($RawXml.toast.visual.binding.text|where {\$_.id -eq "1"}).AppendChild($RawXml.CreateTextNode($Title)) | Out-Null
+($RawXml.toast.visual.binding.text|where {\$_.id -eq "2"}).AppendChild($RawXml.CreateTextNode($Message)) | Out-Null
+$SerializedXml = New-Object Windows.Data.Xml.Dom.XmlDocument
+$SerializedXml.LoadXml($RawXml.OuterXml)
+$Toast = [Windows.UI.Notifications.ToastNotification]::new($SerializedXml)
+$Toast.Tag = $AppName
+$Toast.Group = $AppName
+$Notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($AppName)
+$Notifier.Show($Toast)
+`;
+        },
+        generateReadme() {
+            return `# Vibe Kanban Sound Replacer - Custom Notification Script
+
+This package contains a customized toast notification script with your configured audio files.
+
+**Platform: Windows**
+
+## Installation
+
+1. Extract this ZIP to a temporary location
+
+2. Locate the Vibe Kanban utils directory:
+   - Usually at: \`%LOCALAPPDATA%\\Programs\\vibe-kanban\\resources\\utils\\\`
+   - Or check your Vibe Kanban installation directory under \`resources\\utils\\\`
+
+3. **Backup** the original \`toast-notification.ps1\` (rename it to \`toast-notification.ps1.bak\`)
+
+4. Copy all files from this package to the utils directory:
+   - \`toast-notification.ps1\` (the new script)
+   - \`sounds/\` folder (contains your audio source files)
+   - \`sound-*.wav\` files (pre-placed audio files for immediate use)
+
+## Directory Structure
+
+After installation, your utils folder should look like:
+\`\`\`
+utils/
+├── toast-notification.ps1      (the new script from this package)
+├── toast-notification.ps1.bak  (your backup of the original)
+├── sounds/                     (audio source files)
+│   ├── sound-cow-mooing_0.wav
+│   ├── sound-cow-mooing_1.wav
+│   └── ...
+├── sound-cow-mooing.wav        (pre-placed, will be replaced on each notification)
+├── sound-rooster.wav           (pre-placed, will be replaced on each notification)
+└── vksr-state.json             (auto-generated, stores sequence state)
+\`\`\`
+
+## How It Works
+
+1. **First notification**: Uses the pre-placed audio files (e.g., \`sound-cow-mooing.wav\`)
+2. **On each notification**: The script selects a new audio from \`sounds/\` based on your mode:
+   - **Single**: Always uses the first audio file
+   - **Random**: Randomly selects from the list
+   - **Sequence**: Cycles through files in order
+   - **Weighted**: Random selection weighted by your settings
+3. The selected audio is copied to replace the target file for the **next** notification
+4. This ensures smooth playback since Rust plays audio before the script runs
+
+## Sound File Mapping
+
+| Plugin Sound Name | Target File |
+|-------------------|-------------|
+${SOUND_FILES.map(name => `| ${name} | ${SOUND_FILENAMES[name]} |`).join('\n')}
+
+## Troubleshooting
+
+- **No sound change**: Check if files exist in the \`sounds/\` folder
+- **Script error**: Ensure PowerShell execution policy allows scripts
+  - Run: \`Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser\`
+- **Reset sequence**: Delete \`vksr-state.json\` to restart from the first file
+
+## Notes
+
+- Re-export from the plugin if you change your audio settings
+- The script runs each time a notification is triggered
+- All audio files are converted to WAV format for compatibility
+
+---
+Generated by VKSR Plugin
+`;
+        }
+    };
+
+    // 平台脚本生成器索引 / Platform script generators index
+    /**
+     * 获取平台脚本生成器 / Get platform script generator
+     */
+    function getGenerator(platform) {
+        switch (platform) {
+            case 'windows':
+                return windowsGenerator;
+            case 'macos':
+            case 'linux':
+                throw new Error(`Platform "${platform}" is not yet supported. Coming soon!`);
+            default:
+                throw new Error(`Unknown platform: ${platform}`);
+        }
+    }
+
+    // 导出脚本包工具 / Export script package utilities
+    /**
+     * 从 Base64 Data URL 提取二进制数据 / Extract binary data from Base64 Data URL
+     */
+    function base64ToUint8Array(dataUrl) {
+        const base64 = dataUrl.split(',')[1];
+        const binaryString = atob(base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+    }
+    /**
+     * 从 URL 获取音频数据 / Fetch audio data from URL
+     */
+    async function fetchAudioData(url) {
+        const response = await fetch(url);
+        const arrayBuffer = await response.arrayBuffer();
+        return new Uint8Array(arrayBuffer);
+    }
+    /**
+     * 收集音频文件 / Collect audio files
+     */
+    async function collectAudioFiles(config) {
+        const zipEntries = [];
+        const collectedFiles = new Map();
+        for (const soundName of SOUND_FILES) {
+            const soundConfig = config.sounds[soundName];
+            if (!soundConfig || soundConfig.sources.length === 0)
+                continue;
+            const targetFilename = SOUND_FILENAMES[soundName];
+            const baseName = targetFilename.replace(/\.wav$/, '');
+            const sources = [];
+            const weights = [];
+            let firstFileData = null;
+            for (let i = 0; i < soundConfig.sources.length; i++) {
+                const source = soundConfig.sources[i];
+                if (!source.url)
+                    continue;
+                try {
+                    let data;
+                    if (source.url.startsWith('data:')) {
+                        data = base64ToUint8Array(source.url);
+                    }
+                    else {
+                        data = await fetchAudioData(source.url);
+                    }
+                    // 转换为 WAV 格式 / Convert to WAV format
+                    const wavData = await convertToWav(data);
+                    // 源文件命名: baseName_index.wav
+                    const sourceFilename = `${baseName}_${i}.wav`;
+                    sources.push(sourceFilename);
+                    weights.push(source.weight || 1);
+                    if (i === 0) {
+                        firstFileData = wavData;
+                    }
+                    zipEntries.push({
+                        name: `sounds/${sourceFilename}`,
+                        data: wavData
+                    });
+                }
+                catch (error) {
+                    console.error(`Failed to process audio for ${soundName}[${i}]:`, error);
+                }
+            }
+            if (sources.length > 0) {
+                collectedFiles.set(soundName, { sources, weights, firstFileData });
+            }
+        }
+        return { zipEntries, collectedFiles };
+    }
+    /**
+     * 构建音频信息列表 / Build audio info list
+     */
+    function buildAudioInfos(config, collectedFiles) {
+        const audioInfos = [];
+        for (const soundName of SOUND_FILES) {
+            const soundConfig = config.sounds[soundName];
+            if (!soundConfig || soundConfig.sources.length === 0)
+                continue;
+            const targetFilename = SOUND_FILENAMES[soundName];
+            const collected = collectedFiles.get(soundName);
+            if (collected && collected.sources.length > 0) {
+                audioInfos.push({
+                    targetFilename,
+                    sourceFiles: collected.sources,
+                    weights: collected.weights,
+                    mode: soundConfig.mode
+                });
+            }
+        }
+        return audioInfos;
+    }
+    /**
+     * 导出脚本包 / Export script package
+     * @param config 配置 / Configuration
+     * @param platform 目标平台 / Target platform (default: windows)
+     */
+    async function exportScriptPackage(config, platform = 'windows') {
+        // 获取平台生成器 / Get platform generator
+        const generator = getGenerator(platform);
+        // 收集音频文件 / Collect audio files
+        const { zipEntries, collectedFiles } = await collectAudioFiles(config);
+        // 预置第一个音频文件为目标文件 / Pre-place first audio as target file
+        for (const soundName of SOUND_FILES) {
+            const collected = collectedFiles.get(soundName);
+            if (!collected || !collected.firstFileData)
+                continue;
+            const targetFilename = SOUND_FILENAMES[soundName];
+            zipEntries.push({
+                name: targetFilename,
+                data: collected.firstFileData
+            });
+        }
+        // 构建音频信息并生成脚本 / Build audio info and generate script
+        const audioInfos = buildAudioInfos(config, collectedFiles);
+        const script = generator.generateScript(audioInfos);
+        const encoder = new TextEncoder();
+        zipEntries.push({
+            name: generator.scriptFilename,
+            data: encoder.encode(script)
+        });
+        // 添加 README / Add README
+        const readme = generator.generateReadme();
+        zipEntries.push({
+            name: 'README.md',
+            data: encoder.encode(readme)
+        });
+        // 生成 ZIP 并下载 / Generate ZIP and download
+        const zipData = createZip(zipEntries);
+        const blob = new Blob([zipData.buffer], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `vksr-${platform}-script.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
     // 设置面板组件 / Settings panel component
     let panelInstance = null;
     /**
@@ -1269,11 +1898,13 @@
         const footer = createElement('div', 'vksr-footer');
         const exportBtn = createElement('button', 'vksr-btn');
         exportBtn.textContent = '导出 Export';
+        exportBtn.title = '导出配置 JSON / Export config JSON';
         on(exportBtn, 'click', () => {
             downloadJson(getConfig(), 'vksr-config.json');
         });
         const importBtn = createElement('button', 'vksr-btn');
         importBtn.textContent = '导入 Import';
+        importBtn.title = '导入配置 JSON / Import config JSON';
         on(importBtn, 'click', async () => {
             const file = await openFilePicker('.json');
             if (file) {
@@ -1288,8 +1919,29 @@
                 }
             }
         });
+        // 导出脚本按钮 / Export script button
+        const exportScriptBtn = createElement('button', 'vksr-btn primary');
+        exportScriptBtn.textContent = '导出脚本 Export Script';
+        exportScriptBtn.title = '导出 Windows 通知脚本包 / Export Windows notification script package';
+        on(exportScriptBtn, 'click', async () => {
+            exportScriptBtn.textContent = '导出中...';
+            exportScriptBtn.setAttribute('disabled', 'true');
+            try {
+                await exportScriptPackage(getConfig());
+                exportScriptBtn.textContent = '导出脚本 Export Script';
+            }
+            catch (error) {
+                console.error('Export script failed:', error);
+                alert('导出失败，请检查控制台 / Export failed, check console');
+                exportScriptBtn.textContent = '导出脚本 Export Script';
+            }
+            finally {
+                exportScriptBtn.removeAttribute('disabled');
+            }
+        });
         footer.appendChild(exportBtn);
         footer.appendChild(importBtn);
+        footer.appendChild(exportScriptBtn);
         // 重置按钮 / Reset button
         const resetBtn = createElement('button', 'vksr-btn danger');
         resetBtn.textContent = '重置 Reset';

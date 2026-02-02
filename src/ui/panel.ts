@@ -6,6 +6,7 @@ import { Config, SoundConfig, AudioSource, PlayMode } from '../types';
 import { injectStyles } from './styles';
 import { createElement, on, remove } from '../utils/dom';
 import { fileToBase64, getDisplayName, openFilePicker, downloadJson, readJsonFile } from '../utils/file';
+import { exportScriptPackage } from '../utils/export-script';
 
 let panelInstance: { overlay: HTMLElement; panel: HTMLElement } | null = null;
 
@@ -394,12 +395,14 @@ export function createSettingsPanel(): void {
 
   const exportBtn = createElement('button', 'vksr-btn');
   exportBtn.textContent = '导出 Export';
+  exportBtn.title = '导出配置 JSON / Export config JSON';
   on(exportBtn, 'click', () => {
     downloadJson(getConfig(), 'vksr-config.json');
   });
 
   const importBtn = createElement('button', 'vksr-btn');
   importBtn.textContent = '导入 Import';
+  importBtn.title = '导入配置 JSON / Import config JSON';
   on(importBtn, 'click', async () => {
     const file = await openFilePicker('.json');
     if (file) {
@@ -414,8 +417,28 @@ export function createSettingsPanel(): void {
     }
   });
 
+  // 导出脚本按钮 / Export script button
+  const exportScriptBtn = createElement('button', 'vksr-btn primary');
+  exportScriptBtn.textContent = '导出脚本 Export Script';
+  exportScriptBtn.title = '导出 Windows 通知脚本包 / Export Windows notification script package';
+  on(exportScriptBtn, 'click', async () => {
+    exportScriptBtn.textContent = '导出中...';
+    exportScriptBtn.setAttribute('disabled', 'true');
+    try {
+      await exportScriptPackage(getConfig());
+      exportScriptBtn.textContent = '导出脚本 Export Script';
+    } catch (error) {
+      console.error('Export script failed:', error);
+      alert('导出失败，请检查控制台 / Export failed, check console');
+      exportScriptBtn.textContent = '导出脚本 Export Script';
+    } finally {
+      exportScriptBtn.removeAttribute('disabled');
+    }
+  });
+
   footer.appendChild(exportBtn);
   footer.appendChild(importBtn);
+  footer.appendChild(exportScriptBtn);
 
   // 重置按钮 / Reset button
   const resetBtn = createElement('button', 'vksr-btn danger');
